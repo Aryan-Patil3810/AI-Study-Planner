@@ -1,10 +1,9 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import Hero from "./pages/Hero";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Onboarding from "./pages/Onboarding";
 import Dashboard from "./pages/Dashboard";
-import Admin from "./pages/Admin";
-import Hero from "./pages/Hero";
 
 
 export default function App() {
@@ -16,7 +15,6 @@ export default function App() {
         <Route path="/signup" element={<Signup />} />
         <Route path="/onboarding" element={<Onboarding />} />
         <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/admin" element={<Admin />} />
       </Routes>
     </BrowserRouter>
   );
