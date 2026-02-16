@@ -13,6 +13,8 @@ export default function Dashboard() {
   const [editingTask, setEditingTask] = useState(null);
   const [editForm, setEditForm] = useState({ title: "", subject: "", duration_minutes: 30 });
 
+  const [aiLoading, setAiLoading] = useState(false);
+
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
   useEffect(() => {
@@ -28,13 +30,7 @@ export default function Dashboard() {
         .single();
       setProfile(p);
 
-      const { data: t } = await supabase
-        .from("tasks")
-        .select("*")
-        .eq("user_id", user.id)
-        .eq("date", today)
-        .order("created_at", { ascending: true });
-      setTasksToday(t || []);
+      await refreshToday();
 
       const { data: s } = await supabase
         .from("streaks")
@@ -100,47 +96,13 @@ export default function Dashboard() {
     refreshToday();
   };
 
-  const generateTodayPlan = async () => {
-    const { data: userData } = await supabase.auth.getUser();
-    const user = userData.user;
-    if (!user || !profile) return;
-
-    const { data: existing } = await supabase
-      .from("tasks")
-      .select("id")
-      .eq("user_id", user.id)
-      .eq("date", today);
-
-    if (existing?.length) return alert("Today's plan already exists.");
-
-    const exam = (profile.target_exam || "").toLowerCase();
-    const topics = exam.includes("jee")
-      ? [
-          { title: "Physics Practice", subject: "Physics", topic: "Kinematics", duration: 60 },
-          { title: "Chemistry Revision", subject: "Chemistry", topic: "Mole Concept", duration: 45 },
-          { title: "Maths Practice", subject: "Mathematics", topic: "Quadratic Equations", duration: 45 },
-        ]
-      : [
-          { title: "DSA Practice", subject: "DSA", topic: "Arrays", duration: 60 },
-          { title: "DSA Practice", subject: "DSA", topic: "Strings", duration: 45 },
-          { title: "Revise Concepts", subject: "Core CS", topic: "OOPS Basics", duration: 30 },
-        ];
-
-    const payload = topics.map((t) => ({
-      user_id: user.id,
-      title: t.title,
-      subject: t.subject,
-      topic: t.topic,
-      duration_minutes: t.duration,
-      date: today,
-      status: "pending",
-    }));
-
-    await supabase.from("tasks").insert(payload);
+  const deleteTask = async (taskId) => {
+    const ok = window.confirm("Are you sure you want to delete this task?");
+    if (!ok) return;
+    await supabase.from("tasks").delete().eq("id", taskId);
     refreshToday();
   };
 
-  const [aiLoading, setAiLoading] = useState(false);
   const generatePlanWithAI = async () => {
     try {
       setAiLoading(true);
@@ -148,7 +110,7 @@ export default function Dashboard() {
       const res = await fetch("/api/ai-plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ profile, today }),
+        body: JSON.stringify({ profile }),
       });
 
       const data = await res.json();
@@ -156,8 +118,7 @@ export default function Dashboard() {
 
       if (!planText) {
         console.log("AI raw output:", data.raw);
-        alert("AI gave an unexpected format. Retrying usually fixes it.");
-        setAiLoading(false);
+        alert("AI gave an unexpected format. Try again.");
         return;
       }
 
@@ -165,12 +126,10 @@ export default function Dashboard() {
       try {
         tasks = JSON.parse(planText);
       } catch (e) {
-        console.log("AI raw JSON text:", planText);
-        alert("AI response format issue. Click Generate again.");
-        setAiLoading(false);
+        console.log("AI JSON parse error. Raw JSON:", planText);
+        alert("AI response format issue. Try again.");
         return;
       }
-
 
       const { data: userData } = await supabase.auth.getUser();
       const user = userData.user;
@@ -188,13 +147,11 @@ export default function Dashboard() {
       refreshToday();
     } catch (err) {
       console.error(err);
-      alert("Failed to generate AI plan.");
+      alert("Failed to generate plan with AI.");
     } finally {
       setAiLoading(false);
     }
   };
-
-
 
   const optimizePlan = async () => {
     const { data: userData } = await supabase.auth.getUser();
@@ -217,7 +174,6 @@ export default function Dashboard() {
       user_id: user.id,
       title: t.title,
       subject: t.subject,
-      topic: t.topic,
       duration_minutes: t.duration_minutes,
       date: today,
       status: "pending",
@@ -299,21 +255,12 @@ export default function Dashboard() {
   const completed = tasksToday.filter((t) => t.status === "completed").length;
   const progress = tasksToday.length ? Math.round((completed / tasksToday.length) * 100) : 0;
 
-  const deleteTask = async (taskId) => {
-    const ok = window.confirm("Delete this task?");
-    if (!ok) return;
-
-    await supabase.from("tasks").delete().eq("id", taskId);
-    refreshToday();
-  };
-
-
   return (
     <div className="min-h-screen bg-slate-950 text-white p-6">
       {/* Header */}
       <div className="flex items-center gap-2 mb-6">
         <h1 className="text-2xl font-bold mr-auto">
-          Hi there, {profile?.username || profile?.full_name } 👋
+          Hi there, {profile?.username || profile?.full_name} 👋
         </h1>
         <button onClick={logout} className="bg-red-600 px-3 py-1 rounded text-sm">
           Logout
@@ -365,12 +312,11 @@ export default function Dashboard() {
           <h2 className="text-lg font-semibold mr-auto">Today’s Plan</h2>
           <button
             onClick={generatePlanWithAI}
-              disabled={aiLoading}
-              className="bg-purple-600 px-3 py-1 rounded text-sm disabled:opacity-60"
+            disabled={aiLoading}
+            className="bg-purple-600 px-3 py-1 rounded text-sm disabled:opacity-60"
           >
-          {aiLoading ? "Generating..." : "Generate with AI ✨"}
-        </button>
-
+            {aiLoading ? "Generating..." : "Generate with AI ✨"}
+          </button>
           <button onClick={optimizePlan} className="bg-emerald-600 px-3 py-1 rounded text-sm">
             Optimize (AI)
           </button>
@@ -415,6 +361,12 @@ export default function Dashboard() {
                     className="text-xs bg-indigo-600 px-2 py-1 rounded"
                   >
                     Edit
+                  </button>
+                  <button
+                    onClick={() => deleteTask(task.id)}
+                    className="text-xs bg-red-600 hover:bg-red-700 px-2 py-1 rounded"
+                  >
+                    Delete
                   </button>
                 </div>
               </li>
@@ -466,23 +418,6 @@ export default function Dashboard() {
           </div>
         </div>
       )}
-
-    <li key={task.id} className="bg-slate-800 p-3 rounded flex items-center justify-between">
-      <div>
-        <p className="font-medium">{task.title}</p>
-        <p className="text-sm text-gray-400">
-        {task.subject} • {task.duration_minutes} min
-        </p>
-      </div>
-
-      <button
-        onClick={() => deleteTask(task.id)}
-        className="text-xs bg-red-600 hover:bg-red-700 px-2 py-1 rounded"
-      >
-        Delete
-      </button>
-    </li>
-
     </div>
   );
 }
