@@ -299,6 +299,15 @@ export default function Dashboard() {
   const completed = tasksToday.filter((t) => t.status === "completed").length;
   const progress = tasksToday.length ? Math.round((completed / tasksToday.length) * 100) : 0;
 
+  const deleteTask = async (taskId) => {
+    const ok = window.confirm("Delete this task?");
+    if (!ok) return;
+
+    await supabase.from("tasks").delete().eq("id", taskId);
+    refreshToday();
+  };
+
+
   return (
     <div className="min-h-screen bg-slate-950 text-white p-6">
       {/* Header */}
@@ -457,6 +466,23 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+    <li key={task.id} className="bg-slate-800 p-3 rounded flex items-center justify-between">
+      <div>
+        <p className="font-medium">{task.title}</p>
+        <p className="text-sm text-gray-400">
+        {task.subject} • {task.duration_minutes} min
+        </p>
+      </div>
+
+      <button
+        onClick={() => deleteTask(task.id)}
+        className="text-xs bg-red-600 hover:bg-red-700 px-2 py-1 rounded"
+      >
+        Delete
+      </button>
+    </li>
+
     </div>
   );
 }
