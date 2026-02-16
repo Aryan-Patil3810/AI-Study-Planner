@@ -5,37 +5,35 @@ export default async function handler(req, res) {
     }
 
     const { profile } = req.body;
-
     const maxMinutes = (profile?.daily_hours || 2) * 60;
 
     const prompt = `
-        You are an API that returns ONLY JSON.
-        Return ONLY a valid JSON array. No text, no markdown, no explanation.
+You are an API. Return ONLY valid JSON. No text. No markdown. No backticks.
 
-        Schema:
-        [
-        { "title": string, "subject": string, "duration_minutes": number }
-        ]
+Schema:
+[
+  { "title": string, "subject": string, "duration_minutes": number }
+]
 
-        Rules:
-        - 3 to 5 items only.
-        - Total duration_minutes <= ${maxMinutes}.
-        - Subjects relevant to ${profile?.target_exam || "General study"}.
-        - Today-focused, practical tasks.
+Rules:
+- 3 to 5 items only.
+- Total duration_minutes <= ${maxMinutes}.
+- Subjects relevant to ${profile?.target_exam || "General study"}.
+- Today-focused tasks.
 
-        If you cannot comply, return an empty JSON array: []
-    `;
+If you cannot comply, return [].
+`;
 
     const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${process.env.GROQ_API_KEY}`,
+        Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
         model: "llama3-70b-8192",
         messages: [{ role: "user", content: prompt }],
-        temperature: 0.2,
+        temperature: 0.1,
       }),
     });
 
@@ -45,22 +43,30 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: "Groq API error" });
     }
 
-    const json = await groqRes.json();
-    const text = json.choices?.[0]?.message?.content || "";
+    const data = await groqRes.json();
+    let text = data.choices?.[0]?.message?.content || "";
 
-    // ---- Robust JSON extraction ----
-    let jsonText = text.trim();
+    // ---- Normalize AI output to valid JSON ----
+    text = text.trim();
 
-    // Remove ```json ``` fences if present
-    if (jsonText.startsWith("```")) {
-      jsonText = jsonText.replace(/```json|```/g, "").trim();
+    // Remove code fences if present
+    if (text.startsWith("```")) {
+      text = text.replace(/```json|```/g, "").trim();
     }
 
-    // Extract first JSON array
-    const match = jsonText.match(/\[[\s\S]*\]/);
+    // Extract first JSON array found
+    const match = text.match(/\[[\s\S]*\]/);
     if (!match) {
       console.error("AI raw output:", text);
-      return res.status(200).json({ planText: null, raw: text });
+      return res.status(200).json({ planText: "[]" }); // fallback to empty
+    }
+
+    // Validate JSON
+    try {
+      JSON.parse(match[0]);
+    } catch (e) {
+      console.error("Invalid JSON after extraction:", match[0]);
+      return res.status(200).json({ planText: "[]" }); // fallback to empty
     }
 
     return res.status(200).json({ planText: match[0] });
