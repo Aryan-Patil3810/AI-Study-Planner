@@ -140,6 +140,54 @@ export default function Dashboard() {
     refreshToday();
   };
 
+  const [aiLoading, setAiLoading] = useState(false);
+  const generatePlanWithAI = async () => {
+    try {
+      setAiLoading(true);
+
+      const res = await fetch("/api/ai-plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profile, today }),
+      });
+
+      const data = await res.json();
+      const planText = data.planText;
+
+      let tasks;
+      try {
+        tasks = JSON.parse(planText); // AI returns JSON array
+      }   catch (e) {
+        alert("AI response was not valid JSON. Try again.");
+        console.log("AI raw output:", planText);
+        setAiLoading(false);
+        return;
+      }
+
+      const { data: userData } = await supabase.auth.getUser();
+      const user = userData.user;
+
+      const payload = tasks.map((t) => ({
+        user_id: user.id,
+        title: t.title,
+        subject: t.subject,
+        duration_minutes: t.duration_minutes,
+        date: today,
+        status: "pending",
+      }));
+
+      await supabase.from("tasks").insert(payload);
+      refreshToday();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to generate AI plan.");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+
+
   const optimizePlan = async () => {
     const { data: userData } = await supabase.auth.getUser();
     const user = userData.user;
@@ -298,9 +346,14 @@ export default function Dashboard() {
       <div className="bg-slate-900 p-4 rounded-xl mb-6">
         <div className="flex flex-wrap items-center gap-2 mb-3">
           <h2 className="text-lg font-semibold mr-auto">Today’s Plan</h2>
-          <button onClick={generateTodayPlan} className="bg-indigo-600 px-3 py-1 rounded text-sm">
-            Generate
+          <button
+            onClick={generatePlanWithAI}
+              disabled={aiLoading}
+              className="bg-purple-600 px-3 py-1 rounded text-sm disabled:opacity-60"
+          >
+          {aiLoading ? "Generating..." : "Generate with AI ✨"}
           </button>
+
           <button onClick={optimizePlan} className="bg-emerald-600 px-3 py-1 rounded text-sm">
             Optimize (AI)
           </button>
