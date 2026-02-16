@@ -117,18 +117,16 @@ export default function Dashboard() {
       const planText = data.planText;
 
       if (!planText) {
-        console.log("AI raw output:", data.raw);
-        alert("AI gave an unexpected format. Try again.");
+        console.log("AI returned empty plan.");
         return;
       }
 
-      let tasks;
+
+      let tasks = [];
       try {
-        tasks = JSON.parse(planText);
-      } catch (e) {
-        console.log("AI JSON parse error. Raw JSON:", planText);
-        alert("AI response format issue. Try again.");
-        return;
+        tasks = JSON.parse(planText || []);
+      } catch  {
+        tasks = [];
       }
 
       const { data: userData } = await supabase.auth.getUser();
