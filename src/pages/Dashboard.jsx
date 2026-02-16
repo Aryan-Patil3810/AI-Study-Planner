@@ -154,15 +154,23 @@ export default function Dashboard() {
       const data = await res.json();
       const planText = data.planText;
 
-      let tasks;
-      try {
-        tasks = JSON.parse(planText); // AI returns JSON array
-      }   catch (e) {
-        alert("AI response was not valid JSON. Try again.");
-        console.log("AI raw output:", planText);
+      if (!planText) {
+        console.log("AI raw output:", data.raw);
+        alert("AI gave an unexpected format. Retrying usually fixes it.");
         setAiLoading(false);
         return;
       }
+
+      let tasks;
+      try {
+        tasks = JSON.parse(planText);
+      } catch (e) {
+        console.log("AI raw JSON text:", planText);
+        alert("AI response format issue. Click Generate again.");
+        setAiLoading(false);
+        return;
+      }
+
 
       const { data: userData } = await supabase.auth.getUser();
       const user = userData.user;
@@ -352,7 +360,7 @@ export default function Dashboard() {
               className="bg-purple-600 px-3 py-1 rounded text-sm disabled:opacity-60"
           >
           {aiLoading ? "Generating..." : "Generate with AI ✨"}
-          </button>
+        </button>
 
           <button onClick={optimizePlan} className="bg-emerald-600 px-3 py-1 rounded text-sm">
             Optimize (AI)
