@@ -8,7 +8,9 @@ export default async function handler(req, res) {
     const maxMinutes = (profile?.daily_hours || 2) * 60;
 
     const prompt = `
-Return ONLY JSON with this exact schema:
+You are a study planning assistant.
+
+Return a JSON object with this exact schema:
 
 {
   "tasks": [
@@ -16,12 +18,16 @@ Return ONLY JSON with this exact schema:
   ]
 }
 
-Rules:
-- 3 to 5 tasks.
-- Total duration_minutes <= ${maxMinutes}.
-- Subjects relevant to ${profile?.target_exam || "General"}.
-- Today-focused tasks.
+Guidelines:
+- Generate 3 to 5 realistic tasks for TODAY.
+- Total duration_minutes should be close to ${maxMinutes} (can be less, not more).
+- Subjects should match ${profile?.target_exam || "General study"}.
+- Mix practice and revision.
+- Titles should be concrete actions (e.g., "Solve 20 Physics MCQs", "Revise Quadratic Equations").
+
+Return only the JSON object. Do not include any other text.
 `;
+
 
     const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
