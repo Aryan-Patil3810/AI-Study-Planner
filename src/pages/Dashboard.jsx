@@ -248,7 +248,7 @@ export default function Dashboard() {
       {/* Header */}
       <div className="flex items-center gap-2 mb-6">
         <h1 className="text-2xl font-bold mr-auto">
-          Hi there, {profile?.username || profile?.full_name || "there"} 👋
+          Hi there, {profile?.username || profile?.full_name } 👋
         </h1>
         <button onClick={logout} className="bg-red-600 px-3 py-1 rounded text-sm">
           Logout
