@@ -8,34 +8,37 @@ export default async function handler(req, res) {
     const maxMinutes = (profile?.daily_hours || 2) * 60;
 
     const prompt = `
-You are an API. Return ONLY valid JSON. No text. No markdown. No backticks.
+        Return a JSON object with a key "tasks".
 
-Schema:
-[
-  { "title": string, "subject": string, "duration_minutes": number }
-]
+        Schema:
+        {
+        "tasks": [
+            { "title": string, "subject": string, "duration_minutes": number }
+        ]
+        }
 
-Rules:
-- 3 to 5 items only.
-- Total duration_minutes <= ${maxMinutes}.
-- Subjects relevant to ${profile?.target_exam || "General study"}.
-- Today-focused tasks.
+        Rules:
+        - 3 to 5 tasks.
+        - Total duration_minutes <= ${maxMinutes}.
+        - Subjects relevant to ${profile?.target_exam || "General"}.
+        - Today-focused tasks.
+    `;
 
-If you cannot comply, return [].
-`;
 
     const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "llama3-70b-8192",
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.1,
-      }),
+        method: "POST",
+        headers: {
+            Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            model: "llama3-70b-8192",
+            messages: [{ role: "user", content: prompt }],
+            temperature: 0.1,
+            response_format: { type: "json_object" }, // 👈 FORCE JSON MODE
+        }),
     });
+
 
     if (!groqRes.ok) {
       const errText = await groqRes.text();
@@ -43,23 +46,20 @@ If you cannot comply, return [].
       return res.status(500).json({ error: "Groq API error" });
     }
 
-    const data = await groqRes.json();
-    let text = data.choices?.[0]?.message?.content || "";
+   const data = await groqRes.json();
+    const content = data.choices?.[0]?.message?.content;
 
-    // ---- Normalize AI output to valid JSON ----
-    text = text.trim();
-
-    // Remove code fences if present
-    if (text.startsWith("```")) {
-      text = text.replace(/```json|```/g, "").trim();
+    let parsed;
+    try {
+    parsed = JSON.parse(content);
+    } catch (e) {
+        console.error("JSON mode parse failed:", content);
+        return res.status(200).json({ planText: "[]" });
     }
 
-    // Extract first JSON array found
-    const match = text.match(/\[[\s\S]*\]/);
-    if (!match) {
-      console.error("AI raw output:", text);
-      return res.status(200).json({ planText: "[]" }); // fallback to empty
-    }
+    const tasks = parsed.tasks || [];
+    return res.status(200).json({ planText: JSON.stringify(tasks) });
+
 
     // Validate JSON
     try {
